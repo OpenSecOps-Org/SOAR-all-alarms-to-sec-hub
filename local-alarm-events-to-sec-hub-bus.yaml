@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  This template is used to create a StackSet in the Org account in N Virginia, 
+  deploying to all accounts in all regions used. For the security account, this
+  template will define an EventBusPolicy for the default event bus that allows
+  other accounts in the organization to use PutEvents to transfer events to the
+  security account. For all other accounts, it will set up a role and a rule 
+  to transfer local alarm events to the security account.
+
+Parameters:
+  SecurityAccountNumber:
+    Type: String
+    Description: The account number of the Security account
+    Default: 111111111111
+  PrincipalOrgID:
+    Type: String
+    Description: The Principal Organization ID
+    Default: 'o-1234567890'
+
+Conditions:
+  SecurityAccount: !Equals [!Ref SecurityAccountNumber, !Ref AWS::AccountId]
+  NotSecurityAccount: !Not [Condition: SecurityAccount]
+
+Resources:
+  AlarmPutEventCrossAccountRole:
+    Type: AWS::IAM::Role
+    Condition: NotSecurityAccount
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: '/'
+      Policies:
+        - PolicyName: AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - events:PutEvents
+                Resource:
+                  - !Sub 'arn:aws:events:${AWS::Region}:${SecurityAccountNumber}:event-bus/default'
+
+  AlarmsCrossAccountRule:
+    Type: 'AWS::Events::Rule'
+    Condition: NotSecurityAccount
+    Properties:
+      Description: Send all raised ALARMS to the Security Hub default event bus
+      EventPattern:
+        source:
+          - aws.cloudwatch
+        detail-type:
+          - CloudWatch Alarm State Change
+        detail:
+          state:
+            value:
+              - ALARM
+      State: ENABLED
+      Targets:
+        - Id: AlarmsToSecAccount
+          Arn: !Sub 'arn:aws:events:${AWS::Region}:${SecurityAccountNumber}:event-bus/default'
+          RoleArn: !GetAtt AlarmPutEventCrossAccountRole.Arn
+
+  SampleEventBusPolicy:
+    Type: AWS::Events::EventBusPolicy
+    Condition: SecurityAccount
+    Properties:
+      StatementId: 'allow_all_accounts_from_organization_to_put_events'
+      Statement:
+        Effect: 'Allow'
+        Principal: '*'
+        Action: 'events:PutEvents'
+        Resource: !Sub 'arn:aws:events:${AWS::Region}:${SecurityAccountNumber}:event-bus/default'
+        Condition:
+          StringEquals:
+            'aws:PrincipalOrgID': !Ref PrincipalOrgID
