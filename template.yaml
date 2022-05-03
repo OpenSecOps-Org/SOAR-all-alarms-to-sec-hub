@@ -12,11 +12,11 @@ Parameters:
   AlarmTypeForASFF:
     Type: String
     Description: The alarm type for the ASFF finding created
-    Default: buzzcloud-infrastructural-alarms
+    Default: soar-infrastructural-alarms
   CompanyName:
     Type: String
     Description: The CompanyName for the ASFF finding created
-    Default: Buzzcloud Infrastructural Alarms
+    Default: Sunstone SOAR Infrastructural Alarms
 
 Resources:
   AllAlarmsToSecHubFunction:
@@ -24,7 +24,7 @@ Resources:
     Properties:
       CodeUri: lambda_function
       Handler: lambda/app.lambda_handler
-      Runtime: python3.9
+      Runtime: python3.8
       Events:
         AlarmRaised:
           Type: CloudWatchEvent
