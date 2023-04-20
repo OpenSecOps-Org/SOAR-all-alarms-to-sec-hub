@@ -2,11 +2,12 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   This SAM project creates Security Hub findings for all CloudWatch Alarm Change events
-  to the state ALARM. Deploy it once, in the Security account in North Virginia.
+  to the state ALARM. Deploy it once, in the Security account in your main region.
 
 Globals:
   Function:
-    Timeout: 30
+    Runtime: python3.9
+    Timeout: 900
 
 Parameters:
   AlarmTypeForASFF:
@@ -16,7 +17,7 @@ Parameters:
   CompanyName:
     Type: String
     Description: The CompanyName for the ASFF finding created
-    Default: Sunstone SOAR Infrastructural Alarms
+    Default: Delegat SOAR Infrastructural Alarms
 
 Resources:
   AllAlarmsToSecHubFunction:
@@ -24,7 +25,6 @@ Resources:
     Properties:
       CodeUri: lambda_function
       Handler: lambda/app.lambda_handler
-      Runtime: python3.8
       Events:
         AlarmRaised:
           Type: CloudWatchEvent
