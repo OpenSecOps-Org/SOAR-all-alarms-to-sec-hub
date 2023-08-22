@@ -1,0 +1,20 @@
+# Deployment configuration
+
+repo-name    = "SOAR-all-alarms-to-sec-hub"
+part-of      = 'soar'
+
+
+[SAM]
+profile      = "security-account"
+regions      = '{main-region}'
+stack-name   = "INFRA-all-alarms-to-sec-hub"
+s3-prefix    = "INFRA-all-alarms-to-sec-hub"
+
+
+[[post-SAM-CloudFormation]]
+name         = "INFRA-local-alarm-events-to-sec-hub-bus"
+template     = 'cloudformation/local-alarm-events-to-sec-hub-bus.yaml'
+account      = 'ALL'
+regions      = '{all-regions}'
+
+
