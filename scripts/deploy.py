@@ -47,7 +47,7 @@ def load_toml(toml_file):
 
 
 def get_account_data_from_toml(account_key, id_or_profile):
-    toml_file = '../Delegat-Install/config-accounts.toml'
+    toml_file = '../Delegat-Install/accounts.toml'
     # Load the TOML file
     config = load_toml(toml_file)
 
@@ -62,7 +62,7 @@ def get_account_data_from_toml(account_key, id_or_profile):
 
 
 def get_all_parameters(delegat_app):
-    toml_file = f'../Delegat-Install/config-{delegat_app}.toml'
+    toml_file = f'../Delegat-Install/apps/{delegat_app}/parameters.toml'
     # Load and return the whole TOML file
     config = load_toml(toml_file)
     return config
