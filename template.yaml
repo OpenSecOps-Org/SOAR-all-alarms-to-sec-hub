@@ -13,7 +13,7 @@ Parameters:
   AlarmTypeForASFF:
     Type: String
     Description: The alarm type for the ASFF finding created
-    Default: soar-infrastructural-alarms
+    Default: soar-cloudwatch-alarms
   CompanyName:
     Type: String
     Description: The CompanyName for the ASFF finding created
