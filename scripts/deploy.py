@@ -90,6 +90,10 @@ def parameters_to_cloudformation_json(params, repo_name, template_name):
 
 
 def dereference(value, params):
+    # If not a string, just return
+    if not isinstance(value, str):
+        return value
+
     # Check if value is exactly '{all-regions}'
     if value == '{all-regions}':
         # Get main region and other regions
@@ -139,6 +143,8 @@ def process_sam(sam, repo_name, params):
 
     sam_account = sam['profile']
     sam_regions = dereference(sam['regions'], params)
+    if isinstance(sam_regions, str):
+        sam_regions = [sam_regions]
 
     stack_name = sam['stack-name']
     capabilities = sam.get('capabilities', 'CAPABILITY_IAM')
@@ -156,7 +162,7 @@ def process_sam(sam, repo_name, params):
         subprocess.run(['git', 'pull'], check=True)
 
         printc(LIGHT_BLUE, "Executing 'sam build'...")
-        subprocess.run(['sam', 'build'], check=True)
+        subprocess.run(['sam', 'build', '--parallel', '--cached'], check=True)
 
         for region in sam_regions:
             printc(LIGHT_BLUE, f"")
