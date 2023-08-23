@@ -148,7 +148,7 @@ def process_sam(sam, repo_name, params):
 
     stack_name = sam['stack-name']
     capabilities = sam.get('capabilities', 'CAPABILITY_IAM')
-    s3_prefix = sam['s3-prefix']
+    s3_prefix = sam.get('s3-prefix', stack_name)
     tags = 'infra:immutable="true"'
 
     # Get the AWS SSO profile
