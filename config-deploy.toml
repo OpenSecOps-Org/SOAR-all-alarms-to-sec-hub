@@ -13,7 +13,7 @@ regions      = '{main-region}'
 [[post-SAM-CloudFormation]]
 name         = "INFRA-local-alarm-events-to-sec-hub-bus"
 template     = 'cloudformation/local-alarm-events-to-sec-hub-bus.yaml'
-account      = '{all-accounts}'
+account      = 'ALL'
 regions      = '{all-regions}'
 
 

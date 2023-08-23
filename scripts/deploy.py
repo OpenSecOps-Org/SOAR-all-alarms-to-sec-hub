@@ -728,7 +728,7 @@ def process_cloudformation(jobs, repo_name, params, cross_account_role):
 
         printc(YELLOW, '')
         stack_set = False
-        if account == '{all-accounts}':
+        if account == 'ALL':
             stack_set = True
             account = admin_account_id
             printc(LIGHT_BLUE, f"{index}. {stack_name} (StackSet):")
