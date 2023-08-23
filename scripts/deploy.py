@@ -652,12 +652,12 @@ def monitor_stackset_stacks_until_complete(stackset_name, account_id, region, ro
             
             # Print the status of each stack instance
             for instance in stack_instances['Summaries']:
-                stack_instance_identifier = f"{instance['Account']}: {instance['Region']:<15}"
+                stack_instance_identifier = f"{instance['Account']} {instance['Region']:<15}"
                 stack_status = instance['Status']
                 if stack_status in terminal_states:
-                    printc(GREEN, f"Stack: {stack_instance_identifier}, Status: {stack_status}")
+                    printc(GREEN, f"{stack_instance_identifier} {stack_status}")
                 else:
-                    printc(YELLOW, f"Stack: {stack_instance_identifier}, Status: {stack_status}")
+                    printc(YELLOW, f"{stack_instance_identifier} {stack_status}")
             
             # Move the cursor to the beginning of the line
             sys.stdout.write("\033[F" * (len(stack_instances['Summaries'])))
