@@ -11,6 +11,7 @@ import botocore
 from botocore.exceptions import ClientError
 from botocore.exceptions import WaiterError
 import time
+import shutil
 
 
 # Create an STS client
@@ -162,7 +163,16 @@ def process_sam(sam, repo_name, params):
         subprocess.run(['git', 'pull'], check=True)
 
         printc(LIGHT_BLUE, "Executing 'sam build'...")
-        subprocess.run(['sam', 'build', '--parallel', '--cached'], check=True)
+        try:
+            subprocess.run(['sam', 'build', '--parallel', '--cached'], check=True)
+        except subprocess.CalledProcessError:
+            printc(RED, "An error occurred. Retrying after cleaning build directory...")
+
+            # Remove the .aws-sam directory
+            shutil.rmtree('.aws-sam', ignore_errors=True)
+
+            # Retry the build command
+            subprocess.run(['sam', 'build', '--parallel', '--cached'], check=True)
 
         for region in sam_regions:
             printc(LIGHT_BLUE, f"")
