@@ -49,6 +49,8 @@ fi
 
 # Check if the 'releases' branch exists
 if ! git rev-parse --verify releases > /dev/null 2>&1; then
+    # Clean up the working directory before creating a new branch
+    git clean -fd
     # For a fresh releases branch, squash all the existing commits into one
     git checkout --orphan releases
     git add -A
