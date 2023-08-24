@@ -765,7 +765,7 @@ def process_cloudformation(jobs, repo_name, params, cross_account_role):
                 changing = update_stack_set(stack_name, template_str, stack_parameters, capabilities, regions, account, main_region, cross_account_role)
                 if changing:
                     time.sleep(1)
-                    monitor_stack_until_complete(stack_name, account, main_region, cross_account_role)
+                    monitor_stackset_until_complete(stack_name, account, main_region, cross_account_role)
             else:
                 # printc(YELLOW, f"- StackSet does not exist in {account} and {main_region}")
                 create_stack_set(stack_name, template_str, stack_parameters, capabilities, root_ou, regions, account, main_region, cross_account_role)
