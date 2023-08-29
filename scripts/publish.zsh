@@ -1,5 +1,11 @@
 #!/usr/bin/env zsh
 
+# Check for uncommitted changes
+if ! git diff-index --quiet HEAD --; then
+    echo "There are uncommitted changes. Please commit or stash them before running this script."
+    exit 1
+fi
+
 # Check for version argument. If not provided, read from CHANGELOG.md
 if [ -z "$1" ]; then
     if [ -f "$PWD/CHANGELOG.md" ]; then
