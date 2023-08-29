@@ -1,18 +1,18 @@
 #!/usr/bin/env zsh
 
-# Check for uncommitted changes
-if ! git diff-index --quiet HEAD --; then
-    echo "There are uncommitted changes. Please commit or stash them before running this script."
-    exit 1
-fi
-
-# Check for version argument
+# Check for version argument. If not provided, read from CHANGELOG.md
 if [ -z "$1" ]; then
-    echo "Please provide a version tag (e.g., v1.0.0)."
-    exit 1
-fi
+    if [ -f "$PWD/CHANGELOG.md" ]; then
+        TAG_VERSION=$(awk '/^## v/{print $2; exit}' "$PWD/CHANGELOG.md")
+    fi
 
-TAG_VERSION=$1
+    if [ -z "$TAG_VERSION" ]; then
+        echo "Please provide a version tag (e.g., v1.0.0) or add it to the CHANGELOG.md in the format '## v1.0.0'"
+        exit 1
+    fi
+else
+    TAG_VERSION=$1
+fi
 
 # Check if the tag already exists
 if git rev-parse $TAG_VERSION > /dev/null 2>&1; then
