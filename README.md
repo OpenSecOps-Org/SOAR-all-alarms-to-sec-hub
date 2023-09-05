@@ -5,11 +5,10 @@ This SAM project creates Security Hub findings for all CloudWatch Alarm Change e
 
 ## Deployment
 
-First log in to your AWS organisation using SSO and a profile that gives you
-AWSAdministratorAccess to the AWS Organizations admin account.
+First log in to your AWS organisation using SSO and a default profile that gives you AWSAdministratorAccess.
 
 ```console
-aws sso login --profile <profile-name>
+aws sso login
 ```
 
 Then type:

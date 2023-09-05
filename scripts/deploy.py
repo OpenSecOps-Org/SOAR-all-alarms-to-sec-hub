@@ -13,9 +13,8 @@ from botocore.exceptions import WaiterError
 import time
 import shutil
 
-
 # Create an STS client
-sts_client = boto3.client('sts')
+STS_CLIENT = boto3.client('sts')
 
 
 # ---------------------------------------------------------------------------------------
@@ -221,13 +220,15 @@ def process_sam(sam, repo_name, params):
 # Function to get a client for the specified service, account, and region
 def get_client(client_type, account_id, region, role):
     # Assume the specified role in the specified account
-    other_session = sts_client.assume_role(
+    other_session = STS_CLIENT.assume_role(
         RoleArn=f"arn:aws:iam::{account_id}:role/{role}",
         RoleSessionName=f"deploy_cloudformation_{account_id}"
     )
+    
     access_key = other_session['Credentials']['AccessKeyId']
     secret_key = other_session['Credentials']['SecretAccessKey']
     session_token = other_session['Credentials']['SessionToken']
+    
     # Create a client using the assumed role credentials and specified region
     return boto3.client(
         client_type,
