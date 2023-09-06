@@ -35,6 +35,19 @@ def printc(color, string, **kwargs):
     print(f"{color}{string}\033[K{END}", **kwargs)
 
 
+def check_aws_sso_session():
+    try:
+        # Try to get the user's identity
+        subprocess.run(['aws', 'sts', 'get-caller-identity'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        # If the command failed, the user is not logged in
+        printc(RED, "You do not have a valid AWS SSO session. Please run 'aws sso login' and try again.")
+        return False
+
+    # If the command succeeded, the user is logged in
+    return True
+
+
 def load_toml(toml_file):
     # Load the TOML file
     try:
@@ -829,6 +842,10 @@ def deploy():
 
 
 def main():
+    # Check that the user is logged in
+    if not check_aws_sso_session():
+        return
+    
     deploy()
 
 
