@@ -4,7 +4,8 @@ Copyright 2023 Delegat AB
 
 All rights reserved.
 
-Unauthorized copying of this project, via any medium is strictly prohibited.
+Unauthorized copying of this project, via any medium, is strictly prohibited.
+
 Proprietary and confidential.
 
 
