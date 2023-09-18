@@ -147,15 +147,15 @@ def dereference(value, params):
 # 
 # ---------------------------------------------------------------------------------------
 
-def process_sam(sam, repo_name, params, dry_run, _verbose):
-    printc(LIGHT_BLUE, f"")
-    printc(LIGHT_BLUE, f"")
+def process_sam(sam, repo_name, params, dry_run, verbose):
+    printc(LIGHT_BLUE, "")
+    printc(LIGHT_BLUE, "")
     printc(LIGHT_BLUE, "================================================")
-    printc(LIGHT_BLUE, f"")
+    printc(LIGHT_BLUE, "")
     printc(LIGHT_BLUE, f"  {repo_name} (SAM)")
-    printc(LIGHT_BLUE, f"")
+    printc(LIGHT_BLUE, "")
     printc(LIGHT_BLUE, "------------------------------------------------")
-    printc(LIGHT_BLUE, f"")
+    printc(LIGHT_BLUE, "")
 
     sam_account = sam['profile']
     sam_regions = dereference(sam['regions'], params)
@@ -177,27 +177,34 @@ def process_sam(sam, repo_name, params, dry_run, _verbose):
         printc(LIGHT_BLUE, "Executing 'git pull'...")
         subprocess.run(['git', 'pull'], check=True)
 
+        printc(LIGHT_BLUE, "")
         printc(LIGHT_BLUE, "Executing 'sam build'...")
+    
+        args = ['sam', 'build', '--parallel', '--cached']
+
         try:
-            subprocess.run(['sam', 'build', '--parallel', '--cached'], check=True)
+            if verbose:
+                subprocess.run(args, check=True)
+            else:
+                subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         except subprocess.CalledProcessError:
             printc(RED, "An error occurred. Retrying after cleaning build directory...")
 
             # Remove the .aws-sam directory
             shutil.rmtree('.aws-sam', ignore_errors=True)
 
-            # Retry the build command
-            subprocess.run(['sam', 'build', '--parallel', '--cached'], check=True)
+            # Retry the build command, always verbosely
+            subprocess.run(args, check=True)
 
         for region in sam_regions:
-            printc(LIGHT_BLUE, f"")
-            printc(LIGHT_BLUE, f"")
+            printc(LIGHT_BLUE, "")
+            printc(LIGHT_BLUE, "")
             printc(LIGHT_BLUE, "================================================")
-            printc(LIGHT_BLUE, f"")
+            printc(LIGHT_BLUE, "")
             printc(LIGHT_BLUE, f"  Deploying {stack_name} to {region}...")
-            printc(LIGHT_BLUE, f"")
+            printc(LIGHT_BLUE, "")
             printc(LIGHT_BLUE, "------------------------------------------------")
-            printc(LIGHT_BLUE, f"")
+            printc(LIGHT_BLUE, "")
 
             args = [
                     'sam', 'deploy', 
@@ -218,6 +225,9 @@ def process_sam(sam, repo_name, params, dry_run, _verbose):
                 printc(GREEN, "Executing 'sam deploy' with --no-execute-changeset...")
             else:
                 printc(LIGHT_BLUE, "Executing 'sam deploy'...")
+
+            if verbose:
+                args.append('--debug')
                 
             subprocess.run(args, check=True)
 
