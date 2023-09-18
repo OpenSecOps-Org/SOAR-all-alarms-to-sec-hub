@@ -5,10 +5,9 @@ part-of      = 'soar'
 
 
 [SAM]
+stack-name   = "INFRA-all-alarms-to-sec-hub"
 profile      = "security-account"
 regions      = '{main-region}'
-stack-name   = "INFRA-all-alarms-to-sec-hub"
-s3-prefix    = "INFRA-all-alarms-to-sec-hub"
 
 
 [[post-SAM-CloudFormation]]
