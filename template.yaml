@@ -17,7 +17,7 @@ Parameters:
   CompanyName:
     Type: String
     Description: The CompanyName for the ASFF finding created
-    Default: Delegat SOAR Infrastructural Alarms
+    Default: OpenSecOps SOAR Infrastructural Alarms
 
 Resources:
   AllAlarmsToSecHubFunction:

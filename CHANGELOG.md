@@ -1,5 +1,9 @@
 # Change Log
 
+## v1.0.9
+    * Updated GitHub remote references in publish.zsh script to use only OpenSecOps-Org, removed Delegat-AB
+    * Updated default company name from 'Delegat SOAR Infrastructural Alarms' to 'OpenSecOps SOAR Infrastructural Alarms'
+
 ## v1.0.8
     * Updated GitHub organization name from CloudSecOps-Org to OpenSecOps-Org.
     * Updated references to CloudSecOps-Installer to Installer.
