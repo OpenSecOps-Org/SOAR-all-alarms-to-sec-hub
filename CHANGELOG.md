@@ -1,5 +1,11 @@
 # Change Log
 
+## v1.1.0
+    * Enhanced Security Hub findings to include monitored AWS resources extracted from alarm configuration
+    * Added support for Step Functions and Lambda resource extraction (app.py:extract_monitored_resource)
+    * Security Hub findings now contain both origin account and actual monitored resource ARNs
+    * Changes enable SOAR enrichment to use actual resource ARNs instead of alarm description parsing
+
 ## v1.0.9
     * Updated GitHub remote references in publish.zsh script to use only OpenSecOps-Org, removed Delegat-AB
     * Updated default company name from 'Delegat SOAR Infrastructural Alarms' to 'OpenSecOps SOAR Infrastructural Alarms'
