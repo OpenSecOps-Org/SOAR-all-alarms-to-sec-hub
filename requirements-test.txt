@@ -1,0 +1,19 @@
+# Test dependencies for SOAR All Alarms to Security Hub
+# Following SOAR testing patterns
+
+# Core testing framework
+pytest>=8.0.0
+pytest-xdist>=3.0.0  # Parallel test execution
+pytest-cov>=4.0.0    # Code coverage
+
+# AWS mocking and testing
+moto[all]>=4.0.0     # AWS service mocking
+boto3>=1.34.0        # AWS SDK for Python
+botocore>=1.34.0     # AWS core library
+
+# Environment management (optional but recommended)
+python-dotenv>=1.0.0  # Automatic .env.test loading
+
+# Additional testing utilities
+freezegun>=1.2.0     # Time mocking (if needed for timestamp tests)
+responses>=0.23.0    # HTTP mocking (if needed for external calls)

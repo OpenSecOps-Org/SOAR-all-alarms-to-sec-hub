@@ -1,0 +1,1 @@
+# Test fixtures for SOAR All Alarms to Security Hub
