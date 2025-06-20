@@ -16,7 +16,7 @@ Environment Variables:
 - COMPANY_NAME: Company name for Security Hub metadata
 
 Author: OpenSecOps SOAR Team
-Version: 1.1.0
+Version: 1.2.0
 """
 
 import os
