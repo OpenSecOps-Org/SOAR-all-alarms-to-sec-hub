@@ -1,6 +1,6 @@
 # Change Log
 
-## v1.2.0
+## v1.2.1
     * Fixed CloudWatch alarm timestamp accuracy for Security Hub findings
     * Now uses actual alarm trigger timestamp (newState.timestamp) instead of EventBridge processing time
     * Added FirstObservedAt and LastObservedAt fields with alarm trigger time for better SOAR correlation
