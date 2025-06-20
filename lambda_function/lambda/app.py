@@ -21,6 +21,7 @@ Author: OpenSecOps SOAR Team
 import os
 import re
 import boto3
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 # Global AWS clients and configuration
@@ -145,7 +146,6 @@ def lambda_handler(event, _context):
     
     # Use actual alarm state change timestamp, fallback to event timestamp
     alarm_timestamp = extract_alarm_timestamp(event)
-    event_timestamp = event['time']  # EventBridge processing timestamp
 
     # Extract alarm details
     detail = event['detail']
@@ -254,6 +254,68 @@ def lambda_handler(event, _context):
         raise  # Re-raise for Lambda error handling
 
 
+def normalize_timestamp(timestamp_str: str) -> str:
+    """
+    Convert various timestamp formats to ISO 8601 with Z suffix using dateutil.
+    
+    Args:
+        timestamp_str: Timestamp string in various formats
+        
+    Returns:
+        Normalized ISO 8601 timestamp string with Z suffix
+    """
+    if not timestamp_str or not isinstance(timestamp_str, str):
+        return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+    
+    try:
+        from dateutil import parser
+        
+        # Use dateutil parser for robust timestamp parsing
+        timestamp_str = timestamp_str.strip()
+        
+        # Parse the timestamp with dateutil (handles many formats automatically)
+        dt = parser.parse(timestamp_str)
+        
+        # Ensure timezone-aware datetime in UTC
+        if dt.tzinfo is None:
+            # Assume UTC if no timezone info
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            # Convert to UTC
+            dt = dt.astimezone(timezone.utc)
+        
+        # Return normalized ISO format with Z suffix, preserving milliseconds
+        iso_str = dt.isoformat()
+        
+        # Ensure we have microseconds/milliseconds for consistency
+        if '.' not in iso_str:
+            # Add .000000 microseconds (which will be truncated to .000 for milliseconds)
+            iso_str = iso_str.replace('+00:00', '.000000+00:00').replace('Z', '.000000Z')
+        
+        # Convert to milliseconds (3 digits) instead of microseconds (6 digits) for consistency
+        if '.' in iso_str and len(iso_str.split('.')[1].split('+')[0].split('Z')[0]) == 6:
+            # Truncate microseconds to milliseconds
+            parts = iso_str.split('.')
+            microseconds = parts[1]
+            if '+' in microseconds:
+                ms_part, tz_part = microseconds.split('+')
+                milliseconds = ms_part[:3]
+                iso_str = f"{parts[0]}.{milliseconds}+{tz_part}"
+            elif 'Z' in microseconds:
+                ms_part = microseconds.replace('Z', '')
+                milliseconds = ms_part[:3]
+                iso_str = f"{parts[0]}.{milliseconds}Z"
+            else:
+                milliseconds = microseconds[:3]
+                iso_str = f"{parts[0]}.{milliseconds}"
+        
+        return iso_str.replace('+00:00', 'Z')
+        
+    except Exception as e:
+        print(f"Warning: Failed to parse timestamp '{timestamp_str}': {e}. Using current time.")
+        return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+
+
 def extract_alarm_timestamp(event: Dict[str, Any]) -> str:
     """
     Extract the most accurate timestamp for the alarm state change.
@@ -267,42 +329,48 @@ def extract_alarm_timestamp(event: Dict[str, Any]) -> str:
         event: CloudWatch alarm state change event
         
     Returns:
-        ISO 8601 timestamp string
+        Normalized ISO 8601 timestamp string with Z suffix
     """
+    # Validate event structure
+    if not isinstance(event, dict):
+        print("Warning: Invalid event structure. Using current time.")
+        return normalize_timestamp('')
+    
     try:
         # Try to get the actual alarm state change timestamp
-        new_state_timestamp = event.get('detail', {}).get('newState', {}).get('timestamp')
-        if new_state_timestamp:
-            # Convert CloudWatch timestamp format to ISO 8601
-            # CloudWatch format: "2024-06-19T12:00:00.000+0000" 
-            # Security Hub needs: "2024-06-19T12:00:00.000Z"
-            if new_state_timestamp.endswith('+0000'):
-                return new_state_timestamp.replace('+0000', 'Z')
-            elif new_state_timestamp.endswith('.000Z'):
-                return new_state_timestamp
-            # If already in correct format, return as-is
-            return new_state_timestamp
+        detail = event.get('detail', {})
+        if isinstance(detail, dict):
+            new_state = detail.get('newState', {})
+            if isinstance(new_state, dict):
+                new_state_timestamp = new_state.get('timestamp')
+                if new_state_timestamp:
+                    normalized = normalize_timestamp(new_state_timestamp)
+                    print(f"Using newState.timestamp: {new_state_timestamp} -> {normalized}")
+                    return normalized
             
-    except (KeyError, TypeError) as e:
-        print(f"Could not extract newState.timestamp: {e}")
+    except Exception as e:
+        print(f"Error extracting newState.timestamp: {e}")
     
     try:
         # Fallback to previous state timestamp if available
-        prev_state_timestamp = event.get('detail', {}).get('previousState', {}).get('timestamp')
-        if prev_state_timestamp:
-            if prev_state_timestamp.endswith('+0000'):
-                return prev_state_timestamp.replace('+0000', 'Z')
-            elif prev_state_timestamp.endswith('.000Z'):
-                return prev_state_timestamp
-            return prev_state_timestamp
+        detail = event.get('detail', {})
+        if isinstance(detail, dict):
+            prev_state = detail.get('previousState', {})
+            if isinstance(prev_state, dict):
+                prev_state_timestamp = prev_state.get('timestamp')
+                if prev_state_timestamp:
+                    normalized = normalize_timestamp(prev_state_timestamp)
+                    print(f"Using previousState.timestamp: {prev_state_timestamp} -> {normalized}")
+                    return normalized
             
-    except (KeyError, TypeError) as e:
-        print(f"Could not extract previousState.timestamp: {e}")
+    except Exception as e:
+        print(f"Error extracting previousState.timestamp: {e}")
     
     # Final fallback to EventBridge event timestamp
     event_time = event.get('time', '')
-    print(f"Using EventBridge timestamp as fallback: {event_time}")
-    return event_time
+    normalized = normalize_timestamp(event_time)
+    print(f"Using EventBridge timestamp as fallback: {event_time} -> {normalized}")
+    return normalized
 
 
 def get_client(client_type, account_id, region, role='SecurityHubRole'):

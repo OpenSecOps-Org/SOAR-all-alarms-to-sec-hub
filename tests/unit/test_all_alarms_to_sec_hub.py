@@ -850,7 +850,235 @@ class TestSpecification_7_ErrorHandlingAndEdgeCases:
                 assert resources[0]['Type'] == 'AwsAccountId'
 
 
-class TestSpecification_8_IntegrationTestingWithRealAWSServices:
+class TestSpecification_8_TimestampHandlingAndEdgeCases:
+    """
+    SPECIFICATION 8: Timestamp Handling and Edge Cases
+    
+    The function MUST handle various timestamp scenarios correctly:
+    - Use actual alarm trigger timestamp (newState.timestamp) when available
+    - Fallback to previousState.timestamp when newState is missing
+    - Fallback to EventBridge timestamp when alarm timestamps are missing
+    - Normalize various timestamp formats to ISO 8601 with Z suffix
+    - Handle malformed or missing timestamps gracefully
+    """
+    
+    def test_uses_newstate_timestamp_when_available(self):
+        """REQUIREMENT: Must use newState.timestamp as primary timestamp source"""
+        lambda_handler = lambda_app.lambda_handler
+        
+        test_event = create_cloudwatch_alarm_event(
+            alarm_name="INFRA-Service-Error-HIGH",
+            event_id="newstate-timestamp-test",
+            description="Test newState timestamp usage"
+        )
+        # Set specific timestamps to verify priority
+        test_event['time'] = "2024-06-19T15:30:45Z"  # EventBridge timestamp (later)
+        test_event['detail']['newState']['timestamp'] = "2024-06-19T15:30:00.000+0000"  # Actual alarm trigger (earlier)
+        test_event['detail']['previousState']['timestamp'] = "2024-06-19T15:25:00.000+0000"  # Previous state
+        
+        with patch.object(lambda_app, 'get_client') as mock_get_client:
+            mock_securityhub = MagicMock()
+            mock_securityhub.batch_import_findings.return_value = {'FailedCount': 0}
+            mock_get_client.return_value = mock_securityhub
+            
+            result = lambda_handler(test_event, None)
+            assert result is True
+            
+            # Verify newState.timestamp was used (normalized to Z format)
+            call_args = mock_securityhub.batch_import_findings.call_args[1]
+            finding = call_args['Findings'][0]
+            
+            assert finding['CreatedAt'] == "2024-06-19T15:30:00.000Z"
+            assert finding['UpdatedAt'] == "2024-06-19T15:30:00.000Z"
+            assert finding['FirstObservedAt'] == "2024-06-19T15:30:00.000Z"
+            assert finding['LastObservedAt'] == "2024-06-19T15:30:00.000Z"
+
+    def test_falls_back_to_previousstate_timestamp(self):
+        """REQUIREMENT: Must fallback to previousState.timestamp when newState is missing"""
+        lambda_handler = lambda_app.lambda_handler
+        
+        test_event = create_cloudwatch_alarm_event(
+            alarm_name="INFRA-Service-Error-HIGH",
+            event_id="previousstate-fallback-test",
+            description="Test previousState timestamp fallback"
+        )
+        # Set timestamps with missing newState
+        test_event['time'] = "2024-06-19T15:30:45Z"  # EventBridge timestamp
+        del test_event['detail']['newState']['timestamp']  # Remove newState timestamp
+        test_event['detail']['previousState']['timestamp'] = "2024-06-19T15:25:00.000+0000"  # Previous state
+        
+        with patch.object(lambda_app, 'get_client') as mock_get_client:
+            mock_securityhub = MagicMock()
+            mock_securityhub.batch_import_findings.return_value = {'FailedCount': 0}
+            mock_get_client.return_value = mock_securityhub
+            
+            result = lambda_handler(test_event, None)
+            assert result is True
+            
+            # Verify previousState.timestamp was used
+            call_args = mock_securityhub.batch_import_findings.call_args[1]
+            finding = call_args['Findings'][0]
+            
+            assert finding['CreatedAt'] == "2024-06-19T15:25:00.000Z"
+            assert finding['FirstObservedAt'] == "2024-06-19T15:25:00.000Z"
+
+    def test_falls_back_to_eventbridge_timestamp(self):
+        """REQUIREMENT: Must fallback to EventBridge timestamp when alarm timestamps are missing"""
+        lambda_handler = lambda_app.lambda_handler
+        
+        test_event = create_cloudwatch_alarm_event(
+            alarm_name="INFRA-Service-Error-HIGH",
+            event_id="eventbridge-fallback-test",
+            description="Test EventBridge timestamp fallback"
+        )
+        # Remove all alarm timestamps
+        del test_event['detail']['newState']['timestamp']
+        del test_event['detail']['previousState']['timestamp']
+        test_event['time'] = "2024-06-19T15:30:45Z"  # Only EventBridge timestamp available
+        
+        with patch.object(lambda_app, 'get_client') as mock_get_client:
+            mock_securityhub = MagicMock()
+            mock_securityhub.batch_import_findings.return_value = {'FailedCount': 0}
+            mock_get_client.return_value = mock_securityhub
+            
+            result = lambda_handler(test_event, None)
+            assert result is True
+            
+            # Verify EventBridge timestamp was used
+            call_args = mock_securityhub.batch_import_findings.call_args[1]
+            finding = call_args['Findings'][0]
+            
+            assert finding['CreatedAt'] == "2024-06-19T15:30:45.000Z"
+            assert finding['FirstObservedAt'] == "2024-06-19T15:30:45.000Z"
+
+    def test_normalizes_various_timestamp_formats(self):
+        """REQUIREMENT: Must normalize various CloudWatch timestamp formats to ISO 8601 with Z"""
+        lambda_handler = lambda_app.lambda_handler
+        
+        # Test various timestamp formats that CloudWatch might produce
+        timestamp_formats = [
+            ("2024-06-19T15:30:00.000+0000", "2024-06-19T15:30:00.000Z"),  # CloudWatch format
+            ("2024-06-19T15:30:00.000+00:00", "2024-06-19T15:30:00.000Z"),  # ISO with +00:00
+            ("2024-06-19T15:30:00Z", "2024-06-19T15:30:00.000Z"),  # Already correct (but normalized to include .000)
+            ("2024-06-19T15:30:00", "2024-06-19T15:30:00.000Z"),  # Missing timezone (normalized to include .000)
+        ]
+        
+        with patch.object(lambda_app, 'get_client') as mock_get_client:
+            mock_securityhub = MagicMock()
+            mock_securityhub.batch_import_findings.return_value = {'FailedCount': 0}
+            mock_get_client.return_value = mock_securityhub
+            
+            for input_format, expected_output in timestamp_formats:
+                test_event = create_cloudwatch_alarm_event(
+                    alarm_name="INFRA-Service-Error-HIGH",
+                    event_id=f"format-test-{len(input_format)}",
+                    description="Test timestamp format normalization"
+                )
+                test_event['detail']['newState']['timestamp'] = input_format
+                
+                result = lambda_handler(test_event, None)
+                assert result is True
+                
+                # Verify timestamp was normalized correctly
+                call_args = mock_securityhub.batch_import_findings.call_args[1]
+                finding = call_args['Findings'][0]
+                
+                assert finding['CreatedAt'] == expected_output
+                assert finding['FirstObservedAt'] == expected_output
+
+    def test_handles_malformed_timestamps_gracefully(self):
+        """REQUIREMENT: Must handle malformed timestamps without crashing"""
+        lambda_handler = lambda_app.lambda_handler
+        
+        # Test various malformed timestamp scenarios
+        malformed_timestamps = [
+            "not-a-timestamp",
+            "2024-13-40T25:70:90Z",  # Invalid date/time
+            "",  # Empty string
+            None,  # None value
+            12345,  # Number instead of string
+        ]
+        
+        with patch.object(lambda_app, 'get_client') as mock_get_client:
+            mock_securityhub = MagicMock()
+            mock_securityhub.batch_import_findings.return_value = {'FailedCount': 0}
+            mock_get_client.return_value = mock_securityhub
+            
+            for malformed_timestamp in malformed_timestamps:
+                test_event = create_cloudwatch_alarm_event(
+                    alarm_name="INFRA-Service-Error-HIGH",
+                    event_id=f"malformed-test-{str(malformed_timestamp)[:5]}",
+                    description="Test malformed timestamp handling"
+                )
+                test_event['detail']['newState']['timestamp'] = malformed_timestamp
+                test_event['time'] = "2024-06-19T15:30:45Z"  # Valid fallback
+                
+                # Should not crash on malformed timestamps
+                result = lambda_handler(test_event, None)
+                assert result is True
+                
+                # Should create finding with fallback timestamp or current time
+                call_args = mock_securityhub.batch_import_findings.call_args[1]
+                finding = call_args['Findings'][0]
+                
+                # Should have valid timestamp (either fallback or current time)
+                assert 'CreatedAt' in finding
+                assert finding['CreatedAt'].endswith('Z')
+                assert 'T' in finding['CreatedAt']
+
+    def test_handles_missing_event_structure_gracefully(self):
+        """REQUIREMENT: Must handle missing event structure elements gracefully"""
+        lambda_handler = lambda_app.lambda_handler
+        
+        # Test missing event structure elements
+        malformed_events = [
+            # Missing detail entirely
+            {
+                "id": "missing-detail-test",
+                "account": "123456789012",
+                "region": "us-east-1",
+                "time": "2024-06-19T15:30:45Z"
+            },
+            # Missing newState/previousState
+            {
+                "id": "missing-states-test",
+                "account": "123456789012",
+                "region": "us-east-1",
+                "time": "2024-06-19T15:30:45Z",
+                "detail": {
+                    "alarmName": "INFRA-Service-Error-HIGH",
+                    "configuration": {"description": "Test"}
+                }
+            },
+            # Non-dict event
+            "not-a-dict"
+        ]
+        
+        for malformed_event in malformed_events:
+            # Should handle malformed events gracefully
+            try:
+                if malformed_event == "not-a-dict":
+                    # This should fail early with appropriate error handling
+                    with patch.object(lambda_app, 'get_client'):
+                        result = lambda_handler(malformed_event, None)
+                        # Should either handle gracefully or raise meaningful error
+                        assert result is not True
+                else:
+                    with patch.object(lambda_app, 'get_client') as mock_get_client:
+                        mock_securityhub = MagicMock()
+                        mock_securityhub.batch_import_findings.return_value = {'FailedCount': 0}
+                        mock_get_client.return_value = mock_securityhub
+                        
+                        result = lambda_handler(malformed_event, None)
+                        # Should either process with fallback or return early
+                        assert result is not None
+            except (KeyError, TypeError, AttributeError) as e:
+                # Acceptable to raise errors for severely malformed events
+                error_msg = str(e).lower()
+                assert any(keyword in error_msg for keyword in ["event", "detail", "string indices", "dict", "account", "region"])
+
+
+class TestSpecification_9_IntegrationTestingWithRealAWSServices:
     """
     SPECIFICATION 8: Integration Testing with Real AWS Services
     

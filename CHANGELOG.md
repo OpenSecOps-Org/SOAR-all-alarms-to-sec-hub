@@ -1,5 +1,14 @@
 # Change Log
 
+## v1.2.5
+    * Enhanced timestamp handling with comprehensive edge case support using python-dateutil
+    * Robust timestamp normalization handles various CloudWatch formats gracefully
+    * Added comprehensive fallback logic for malformed or missing timestamps
+    * Normalized all timestamps to ISO 8601 format with .000Z suffix for consistency
+    * Updated requirements.txt to include python-dateutil (removed boto3 as provided by Lambda runtime)
+    * Added extensive test coverage for timestamp parsing edge cases and error scenarios
+    * Improved reliability of timestamp correlation between CloudWatch alarms and Security Hub findings
+
 ## v1.2.4
     * Fixed CloudWatch alarm timestamp accuracy for Security Hub findings
     * Now uses actual alarm trigger timestamp (newState.timestamp) instead of EventBridge processing time
