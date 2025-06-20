@@ -59,7 +59,7 @@ Required ASFF Fields:
 - GeneratorId: Alarm name
 - AwsAccountId: Origin account ID
 - Types: CloudWatch alarm type classification
-- CreatedAt/UpdatedAt: Event timestamp
+- CreatedAt/UpdatedAt/FirstObservedAt/LastObservedAt: Actual alarm trigger timestamp
 - Severity: Parsed from alarm name
 - Title: Alarm name
 - Description: Alarm description
@@ -152,7 +152,11 @@ class TestSpecification_1_BasicFunctionality:
         )
         
         # Should return without error (we'll mock AWS calls later)
-        with patch.object(lambda_app, 'get_client'):
+        with patch.object(lambda_app, 'get_client') as mock_get_client:
+            mock_securityhub = MagicMock()
+            mock_securityhub.batch_import_findings.return_value = {'FailedCount': 0}
+            mock_get_client.return_value = mock_securityhub
+            
             result = lambda_handler(minimal_event, None)
             assert result is True
 
@@ -503,8 +507,9 @@ class TestSpecification_5_SecurityHubFindingCreationAndASFFCompliance:
             event_id="complete-test-123",
             description="Test service failure detection"
         )
-        # Override timestamp for specific test
-        complete_event['time'] = "2024-06-19T15:30:45Z"
+        # Override timestamps for specific test
+        complete_event['time'] = "2024-06-19T15:30:45Z"  # EventBridge timestamp
+        complete_event['detail']['newState']['timestamp'] = "2024-06-19T15:30:00.000+0000"  # Actual alarm trigger
         
         with patch.object(lambda_app, 'get_client') as mock_get_client:
             mock_securityhub = MagicMock()
@@ -527,8 +532,10 @@ class TestSpecification_5_SecurityHubFindingCreationAndASFFCompliance:
             assert finding['AwsAccountId'] == "123456789012"
             assert 'Types' in finding
             assert isinstance(finding['Types'], list)
-            assert finding['CreatedAt'] == "2024-06-19T15:30:45Z"
-            assert finding['UpdatedAt'] == "2024-06-19T15:30:45Z"
+            assert finding['CreatedAt'] == "2024-06-19T15:30:00.000Z"  # Now uses newState.timestamp
+            assert finding['UpdatedAt'] == "2024-06-19T15:30:00.000Z"
+            assert finding['FirstObservedAt'] == "2024-06-19T15:30:00.000Z"  # Added field
+            assert finding['LastObservedAt'] == "2024-06-19T15:30:00.000Z"   # Added field
             assert 'Severity' in finding
             assert finding['Severity']['Label'] == "HIGH"
             assert finding['Title'] == "INFRA-TestService-Failure-HIGH"

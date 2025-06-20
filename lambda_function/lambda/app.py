@@ -22,6 +22,7 @@ Version: 1.1.0
 import os
 import re
 import boto3
+from typing import Dict, Any, Optional
 
 # Global AWS clients and configuration
 sts_client = boto3.client('sts')
@@ -142,7 +143,10 @@ def lambda_handler(event, _context):
     finding_id = event['id']  # Unique event ID for Security Hub finding
     account_id = event['account']  # Origin account where alarm fired
     region = event['region']  # AWS region of the alarm
-    timestamp = event['time']  # ISO 8601 timestamp
+    
+    # Use actual alarm state change timestamp, fallback to event timestamp
+    alarm_timestamp = extract_alarm_timestamp(event)
+    event_timestamp = event['time']  # EventBridge processing timestamp
 
     # Extract alarm details
     detail = event['detail']
@@ -196,8 +200,10 @@ def lambda_handler(event, _context):
         "Types": [
             f"Software and Configuration Checks/CloudWatch Alarms/{ALARM_TYPE}",
         ],
-        "CreatedAt": timestamp,  # ISO 8601 timestamp from event
-        "UpdatedAt": timestamp,  # Same as created for new findings
+        "CreatedAt": alarm_timestamp,  # Actual alarm trigger time
+        "UpdatedAt": alarm_timestamp,  # Same as created for new findings
+        "FirstObservedAt": alarm_timestamp,  # When the alarm condition was first detected
+        "LastObservedAt": alarm_timestamp,  # Same as first observed for new alarm states
         
         # Severity and description
         "Severity": {
@@ -247,6 +253,57 @@ def lambda_handler(event, _context):
     except Exception as e:
         print(f"Error publishing to Security Hub: {str(e)}")
         raise  # Re-raise for Lambda error handling
+
+
+def extract_alarm_timestamp(event: Dict[str, Any]) -> str:
+    """
+    Extract the most accurate timestamp for the alarm state change.
+    
+    Priority:
+    1. newState.timestamp - actual alarm trigger time
+    2. previousState.timestamp - last known state change  
+    3. event['time'] - EventBridge processing time (fallback)
+    
+    Args:
+        event: CloudWatch alarm state change event
+        
+    Returns:
+        ISO 8601 timestamp string
+    """
+    try:
+        # Try to get the actual alarm state change timestamp
+        new_state_timestamp = event.get('detail', {}).get('newState', {}).get('timestamp')
+        if new_state_timestamp:
+            # Convert CloudWatch timestamp format to ISO 8601
+            # CloudWatch format: "2024-06-19T12:00:00.000+0000" 
+            # Security Hub needs: "2024-06-19T12:00:00.000Z"
+            if new_state_timestamp.endswith('+0000'):
+                return new_state_timestamp.replace('+0000', 'Z')
+            elif new_state_timestamp.endswith('.000Z'):
+                return new_state_timestamp
+            # If already in correct format, return as-is
+            return new_state_timestamp
+            
+    except (KeyError, TypeError) as e:
+        print(f"Could not extract newState.timestamp: {e}")
+    
+    try:
+        # Fallback to previous state timestamp if available
+        prev_state_timestamp = event.get('detail', {}).get('previousState', {}).get('timestamp')
+        if prev_state_timestamp:
+            if prev_state_timestamp.endswith('+0000'):
+                return prev_state_timestamp.replace('+0000', 'Z')
+            elif prev_state_timestamp.endswith('.000Z'):
+                return prev_state_timestamp
+            return prev_state_timestamp
+            
+    except (KeyError, TypeError) as e:
+        print(f"Could not extract previousState.timestamp: {e}")
+    
+    # Final fallback to EventBridge event timestamp
+    event_time = event.get('time', '')
+    print(f"Using EventBridge timestamp as fallback: {event_time}")
+    return event_time
 
 
 def get_client(client_type, account_id, region, role='SecurityHubRole'):
