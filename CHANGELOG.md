@@ -1,5 +1,11 @@
 # Change Log
 
+## v1.2.7
+    * Fixed alarm resource extraction to use correct CloudWatch alarm event structure
+    * Alarm configuration now correctly extracted from metrics[0].metricStat.metric path
+    * Resource dimensions now properly accessed as dictionary instead of array
+    * Enables SOAR enricher to receive accurate Step Functions and Lambda ARNs
+
 ## v1.2.6
     * CHANGELOG correction: v1.2.5 erroneously repeated functionality from v1.2.4
 

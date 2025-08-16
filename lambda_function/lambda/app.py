@@ -60,51 +60,51 @@ def extract_monitored_resource(detail, account_id, region):
         Unsupported: None
     """
     try:
-        # Extract alarm configuration with safe defaults
+        # Extract alarm configuration from the metrics array
         config = detail.get('configuration', {})
-        namespace = config.get('namespace', '')  # e.g., 'AWS/States', 'AWS/Lambda'
-        dimensions = config.get('dimensions', [])  # List of name/value dimension pairs
+        metrics = config.get('metrics', [])
         
-        # Validate dimensions structure to prevent crashes
-        if not isinstance(dimensions, list):
-            print(f"Warning: dimensions is not a list: {type(dimensions)}")
+        # Validate metrics structure
+        if not isinstance(metrics, list) or not metrics:
+            print(f"Warning: no metrics found in configuration")
+            return None
+            
+        # Get the first metric (alarms typically have one metric)
+        metric_info = metrics[0].get('metricStat', {}).get('metric', {})
+        namespace = metric_info.get('namespace', '')  # e.g., 'AWS/States', 'AWS/Lambda'
+        dimensions = metric_info.get('dimensions', {})  # Dictionary of dimension key/value pairs
+        
+        # Validate dimensions structure
+        if not isinstance(dimensions, dict):
+            print(f"Warning: dimensions is not a dict: {type(dimensions)}")
             return None
         
         # Process Step Functions state machine alarms
         if namespace == 'AWS/States':
-            for dim in dimensions:
-                if not isinstance(dim, dict):
-                    continue  # Skip malformed dimension entries
-                    
-                # Look for StateMachineArn dimension containing the full ARN
-                if dim.get('name') == 'StateMachineArn':
-                    state_machine_arn = dim.get('value')
-                    if state_machine_arn and isinstance(state_machine_arn, str):
-                        return {
-                            'Type': 'AwsStatesStateMachine',
-                            'Id': state_machine_arn,  # Already a full ARN
-                            'Region': region
-                        }
+            state_machine_arn = dimensions.get('StateMachineArn')
+            if state_machine_arn and isinstance(state_machine_arn, str):
+                print(f"Found Step Functions resource: {state_machine_arn}")
+                return {
+                    'Type': 'AwsStatesStateMachine',
+                    'Id': state_machine_arn,  # Already a full ARN
+                    'Region': region
+                }
         
         # Process Lambda function alarms        
         elif namespace == 'AWS/Lambda':
-            for dim in dimensions:
-                if not isinstance(dim, dict):
-                    continue  # Skip malformed dimension entries
-                    
-                # Look for FunctionName dimension and construct full ARN
-                if dim.get('name') == 'FunctionName':
-                    function_name = dim.get('value')
-                    if function_name and isinstance(function_name, str):
-                        # Construct full Lambda function ARN from name
-                        function_arn = f"arn:aws:lambda:{region}:{account_id}:function:{function_name}"
-                        return {
-                            'Type': 'AwsLambdaFunction',
-                            'Id': function_arn,
-                            'Region': region
-                        }
+            function_name = dimensions.get('FunctionName')
+            if function_name and isinstance(function_name, str):
+                # Construct full Lambda function ARN from name
+                function_arn = f"arn:aws:lambda:{region}:{account_id}:function:{function_name}"
+                print(f"Found Lambda resource: {function_arn}")
+                return {
+                    'Type': 'AwsLambdaFunction',
+                    'Id': function_arn,
+                    'Region': region
+                }
         
-        # Unsupported namespace, missing dimensions, or no matching dimension found
+        # Log what we found for debugging
+        print(f"No supported resource found - namespace: {namespace}, dimensions: {list(dimensions.keys())}")
         return None
         
     except Exception as e:
