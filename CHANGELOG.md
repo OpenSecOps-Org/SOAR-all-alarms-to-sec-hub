@@ -1,5 +1,8 @@
 # Change Log
 
+## v1.3.0
+    * Converted to OpenSecOps supply-chain framework: hash-pinned dependencies, signed releases, daily CVE scan, Scorecard. See `SECURITY.md`.
+
 ## v1.2.7
     * Fixed alarm resource extraction to use correct CloudWatch alarm event structure
     * Alarm configuration now correctly extracted from metrics[0].metricStat.metric path

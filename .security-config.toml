@@ -1,0 +1,4 @@
+component_name = "SOAR-all-alarms-to-sec-hub"
+converted = true
+converted_in = "v1.3.0"
+acknowledged_cves = []

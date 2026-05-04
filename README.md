@@ -1,5 +1,7 @@
 # all-alarms-to-sec-hub
 
+[![Daily CVE scan](https://github.com/OpenSecOps-Org/SOAR-all-alarms-to-sec-hub/actions/workflows/daily-scan.yml/badge.svg)](https://github.com/OpenSecOps-Org/SOAR-all-alarms-to-sec-hub/actions/workflows/daily-scan.yml) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/OpenSecOps-Org/SOAR-all-alarms-to-sec-hub/badge)](https://scorecard.dev/viewer/?uri=github.com/OpenSecOps-Org/SOAR-all-alarms-to-sec-hub)
+
 This SAM project creates Security Hub findings for all CloudWatch Alarm Change events to the state ALARM.
 
 
