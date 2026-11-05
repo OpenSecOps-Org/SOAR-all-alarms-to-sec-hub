@@ -100,7 +100,7 @@ def sample_cloudwatch_alarm_event():
                 "threshold": 1.0,
                 "comparisonOperator": "GreaterThanOrEqualToThreshold"
             },
-            "newState": {
+            "state": {
                 "value": "ALARM",
                 "reason": "Threshold Crossed: 1 out of the last 1 datapoints [2.0 (19/06/24 12:00:00)] was greater than or equal to the threshold (1.0) (minimum 1 datapoint for OK -> ALARM transition).",
                 "timestamp": "2024-06-19T12:00:00.000+0000"
@@ -150,7 +150,7 @@ def sample_stepfunctions_alarm_event():
                 "threshold": 1.0,
                 "comparisonOperator": "GreaterThanOrEqualToThreshold"
             },
-            "newState": {
+            "state": {
                 "value": "ALARM",
                 "reason": "Threshold Crossed: 1 out of the last 1 datapoints [3.0 (19/06/24 14:30:00)] was greater than or equal to the threshold (1.0).",
                 "timestamp": "2024-06-19T14:30:00.000+0000"

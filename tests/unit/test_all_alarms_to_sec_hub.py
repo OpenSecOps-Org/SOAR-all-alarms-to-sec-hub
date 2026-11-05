@@ -23,8 +23,8 @@ state change events into Security Hub findings by:
 Input: CloudWatch Alarm State Change Event
 - event['detail']['alarmName'] -> Finding title and severity
 - event['detail']['configuration']['description'] -> Finding description  
-- event['detail']['configuration']['namespace'] -> AWS service (AWS/States, AWS/Lambda)
-- event['detail']['configuration']['dimensions'] -> Monitored resource details
+- event['detail']['configuration']['metrics'][0]['metricStat']['metric']['namespace'] -> AWS service (AWS/States, AWS/Lambda)
+- event['detail']['configuration']['metrics'][0]['metricStat']['metric']['dimensions'] -> Monitored resource details
 - event['account'] -> Origin account for cross-account tracking
 - event['region'] -> AWS region for resource placement
 
@@ -456,15 +456,14 @@ class TestSpecification_4_MonitoredResourceExtraction:
         # Use imported module to avoid keyword conflict
         lambda_handler = lambda_app.lambda_handler
         
-        # Create malformed event with missing namespace and dimensions
+        # Create malformed event with no metric information
         malformed_event = create_cloudwatch_alarm_event(
             alarm_name="INFRA-Service-Error-HIGH",
             event_id="malformed-alarm-123",
-            description="Service with missing namespace"
+            description="Service with missing metrics"
         )
-        # Remove namespace and dimensions to simulate malformed configuration
-        del malformed_event['detail']['configuration']['namespace']
-        del malformed_event['detail']['configuration']['dimensions']
+        # Remove the metrics array to simulate malformed configuration
+        del malformed_event['detail']['configuration']['metrics']
         
         with patch.object(lambda_app, 'get_client') as mock_get_client:
             mock_securityhub = MagicMock()
@@ -509,7 +508,7 @@ class TestSpecification_5_SecurityHubFindingCreationAndASFFCompliance:
         )
         # Override timestamps for specific test
         complete_event['time'] = "2024-06-19T15:30:45Z"  # EventBridge timestamp
-        complete_event['detail']['newState']['timestamp'] = "2024-06-19T15:30:00.000+0000"  # Actual alarm trigger
+        complete_event['detail']['state']['timestamp'] = "2024-06-19T15:30:00.000+0000"  # Actual alarm trigger
         
         with patch.object(lambda_app, 'get_client') as mock_get_client:
             mock_securityhub = MagicMock()
@@ -532,7 +531,7 @@ class TestSpecification_5_SecurityHubFindingCreationAndASFFCompliance:
             assert finding['AwsAccountId'] == "123456789012"
             assert 'Types' in finding
             assert isinstance(finding['Types'], list)
-            assert finding['CreatedAt'] == "2024-06-19T15:30:00.000Z"  # Now uses newState.timestamp
+            assert finding['CreatedAt'] == "2024-06-19T15:30:00.000Z"  # Now uses state.timestamp
             assert finding['UpdatedAt'] == "2024-06-19T15:30:00.000Z"
             assert finding['FirstObservedAt'] == "2024-06-19T15:30:00.000Z"  # Added field
             assert finding['LastObservedAt'] == "2024-06-19T15:30:00.000Z"   # Added field
@@ -814,22 +813,21 @@ class TestSpecification_7_ErrorHandlingAndEdgeCases:
         
         # Test various malformed dimension scenarios
         malformed_events = [
-            # dimensions is not a list
+            # dimensions is a string, not a dict
             create_cloudwatch_alarm_event("INFRA-Test-HIGH", "malformed-dims-1", "Test"),
-            # dimensions contains non-dict items
+            # dimensions is a list, not a dict
             create_cloudwatch_alarm_event("INFRA-Test-HIGH", "malformed-dims-2", "Test"),
             # dimension values are not strings
             create_cloudwatch_alarm_event("INFRA-Test-HIGH", "malformed-dims-3", "Test"),
         ]
-        
+
         # Modify the events to have malformed dimensions
-        malformed_events[0]['detail']['configuration']['dimensions'] = "not-a-list"
-        malformed_events[1]['detail']['configuration']['dimensions'] = ["not-a-dict", 123]
-        malformed_events[2]['detail']['configuration']['dimensions'] = [
-            {"name": "StateMachineArn", "value": 12345}  # Value should be string
-        ]
-        malformed_events[2]['detail']['configuration']['namespace'] = "AWS/States"
-        
+        metrics = [e['detail']['configuration']['metrics'][0]['metricStat']['metric'] for e in malformed_events]
+        metrics[0]['dimensions'] = "not-a-dict"
+        metrics[1]['dimensions'] = ["not-a-dict", 123]
+        metrics[2]['dimensions'] = {"StateMachineArn": 12345}  # Value should be string
+        metrics[2]['namespace'] = "AWS/States"
+
         with patch.object(lambda_app, 'get_client') as mock_get_client:
             mock_securityhub = MagicMock()
             mock_securityhub.batch_import_findings.return_value = {'FailedCount': 0}
@@ -855,25 +853,25 @@ class TestSpecification_8_TimestampHandlingAndEdgeCases:
     SPECIFICATION 8: Timestamp Handling and Edge Cases
     
     The function MUST handle various timestamp scenarios correctly:
-    - Use actual alarm trigger timestamp (newState.timestamp) when available
-    - Fallback to previousState.timestamp when newState is missing
-    - Fallback to EventBridge timestamp when alarm timestamps are missing
+    - Use actual alarm trigger timestamp (state.timestamp) when available
+    - Fallback to EventBridge timestamp when state.timestamp is missing
+    - Never use previousState.timestamp, which predates the alarm firing
     - Normalize various timestamp formats to ISO 8601 with Z suffix
     - Handle malformed or missing timestamps gracefully
     """
     
-    def test_uses_newstate_timestamp_when_available(self):
-        """REQUIREMENT: Must use newState.timestamp as primary timestamp source"""
+    def test_uses_state_timestamp_when_available(self):
+        """REQUIREMENT: Must use state.timestamp as primary timestamp source"""
         lambda_handler = lambda_app.lambda_handler
         
         test_event = create_cloudwatch_alarm_event(
             alarm_name="INFRA-Service-Error-HIGH",
-            event_id="newstate-timestamp-test",
-            description="Test newState timestamp usage"
+            event_id="state-timestamp-test",
+            description="Test state timestamp usage"
         )
         # Set specific timestamps to verify priority
         test_event['time'] = "2024-06-19T15:30:45Z"  # EventBridge timestamp (later)
-        test_event['detail']['newState']['timestamp'] = "2024-06-19T15:30:00.000+0000"  # Actual alarm trigger (earlier)
+        test_event['detail']['state']['timestamp'] = "2024-06-19T15:30:00.000+0000"  # Actual alarm trigger (earlier)
         test_event['detail']['previousState']['timestamp'] = "2024-06-19T15:25:00.000+0000"  # Previous state
         
         with patch.object(lambda_app, 'get_client') as mock_get_client:
@@ -884,7 +882,7 @@ class TestSpecification_8_TimestampHandlingAndEdgeCases:
             result = lambda_handler(test_event, None)
             assert result is True
             
-            # Verify newState.timestamp was used (normalized to Z format)
+            # Verify state.timestamp was used (normalized to Z format)
             call_args = mock_securityhub.batch_import_findings.call_args[1]
             finding = call_args['Findings'][0]
             
@@ -893,18 +891,18 @@ class TestSpecification_8_TimestampHandlingAndEdgeCases:
             assert finding['FirstObservedAt'] == "2024-06-19T15:30:00.000Z"
             assert finding['LastObservedAt'] == "2024-06-19T15:30:00.000Z"
 
-    def test_falls_back_to_previousstate_timestamp(self):
-        """REQUIREMENT: Must fallback to previousState.timestamp when newState is missing"""
+    def test_never_uses_previousstate_timestamp(self):
+        """REQUIREMENT: Must use the EventBridge timestamp, not previousState.timestamp, when state.timestamp is missing"""
         lambda_handler = lambda_app.lambda_handler
         
         test_event = create_cloudwatch_alarm_event(
             alarm_name="INFRA-Service-Error-HIGH",
-            event_id="previousstate-fallback-test",
-            description="Test previousState timestamp fallback"
+            event_id="previousstate-not-used-test",
+            description="Test previousState timestamp is never used"
         )
-        # Set timestamps with missing newState
+        # Set timestamps with missing state
         test_event['time'] = "2024-06-19T15:30:45Z"  # EventBridge timestamp
-        del test_event['detail']['newState']['timestamp']  # Remove newState timestamp
+        del test_event['detail']['state']['timestamp']  # Remove state timestamp
         test_event['detail']['previousState']['timestamp'] = "2024-06-19T15:25:00.000+0000"  # Previous state
         
         with patch.object(lambda_app, 'get_client') as mock_get_client:
@@ -915,12 +913,12 @@ class TestSpecification_8_TimestampHandlingAndEdgeCases:
             result = lambda_handler(test_event, None)
             assert result is True
             
-            # Verify previousState.timestamp was used
+            # Verify the EventBridge timestamp was used, not previousState.timestamp
             call_args = mock_securityhub.batch_import_findings.call_args[1]
             finding = call_args['Findings'][0]
             
-            assert finding['CreatedAt'] == "2024-06-19T15:25:00.000Z"
-            assert finding['FirstObservedAt'] == "2024-06-19T15:25:00.000Z"
+            assert finding['CreatedAt'] == "2024-06-19T15:30:45.000Z"
+            assert finding['FirstObservedAt'] == "2024-06-19T15:30:45.000Z"
 
     def test_falls_back_to_eventbridge_timestamp(self):
         """REQUIREMENT: Must fallback to EventBridge timestamp when alarm timestamps are missing"""
@@ -932,7 +930,7 @@ class TestSpecification_8_TimestampHandlingAndEdgeCases:
             description="Test EventBridge timestamp fallback"
         )
         # Remove all alarm timestamps
-        del test_event['detail']['newState']['timestamp']
+        del test_event['detail']['state']['timestamp']
         del test_event['detail']['previousState']['timestamp']
         test_event['time'] = "2024-06-19T15:30:45Z"  # Only EventBridge timestamp available
         
@@ -974,7 +972,7 @@ class TestSpecification_8_TimestampHandlingAndEdgeCases:
                     event_id=f"format-test-{len(input_format)}",
                     description="Test timestamp format normalization"
                 )
-                test_event['detail']['newState']['timestamp'] = input_format
+                test_event['detail']['state']['timestamp'] = input_format
                 
                 result = lambda_handler(test_event, None)
                 assert result is True
@@ -1010,7 +1008,7 @@ class TestSpecification_8_TimestampHandlingAndEdgeCases:
                     event_id=f"malformed-test-{str(malformed_timestamp)[:5]}",
                     description="Test malformed timestamp handling"
                 )
-                test_event['detail']['newState']['timestamp'] = malformed_timestamp
+                test_event['detail']['state']['timestamp'] = malformed_timestamp
                 test_event['time'] = "2024-06-19T15:30:45Z"  # Valid fallback
                 
                 # Should not crash on malformed timestamps
@@ -1039,7 +1037,7 @@ class TestSpecification_8_TimestampHandlingAndEdgeCases:
                 "region": "us-east-1",
                 "time": "2024-06-19T15:30:45Z"
             },
-            # Missing newState/previousState
+            # Missing state/previousState
             {
                 "id": "missing-states-test",
                 "account": "123456789012",

@@ -7,7 +7,7 @@ following the SOAR pattern of centralized test data management.
 Enhanced with patterns from real AWS infrastructure while maintaining anonymization.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 
 def create_cloudwatch_alarm_event(
@@ -17,7 +17,7 @@ def create_cloudwatch_alarm_event(
     event_id: str = "test-event-123",
     description: str = "Test alarm description",
     namespace: str = "AWS/Lambda",
-    dimensions: Optional[List[Dict[str, str]]] = None,
+    dimensions: Optional[Dict[str, str]] = None,
     new_state: str = "ALARM",
     previous_state: str = "OK"
 ) -> Dict[str, Any]:
@@ -31,7 +31,7 @@ def create_cloudwatch_alarm_event(
         event_id: Unique event identifier
         description: Alarm description
         namespace: CloudWatch namespace (AWS/Lambda, AWS/States, etc.)
-        dimensions: Alarm dimensions list
+        dimensions: Alarm dimensions as a name-to-value dict, as AWS sends them
         new_state: New alarm state
         previous_state: Previous alarm state
     
@@ -39,8 +39,8 @@ def create_cloudwatch_alarm_event(
         Complete CloudWatch alarm state change event
     """
     if dimensions is None:
-        dimensions = [{"name": "FunctionName", "value": "TestFunction"}]
-    
+        dimensions = {"FunctionName": "TestFunction"}
+
     return {
         "version": "0",
         "id": event_id,
@@ -56,16 +56,23 @@ def create_cloudwatch_alarm_event(
             "alarmName": alarm_name,
             "configuration": {
                 "description": description,
-                "metricName": "Errors",
-                "namespace": namespace,
-                "statistic": "Sum",
-                "dimensions": dimensions,
-                "period": 60,
-                "evaluationPeriods": 1,
-                "threshold": 1.0,
-                "comparisonOperator": "GreaterThanOrEqualToThreshold"
+                "metrics": [
+                    {
+                        "id": "m1",
+                        "metricStat": {
+                            "metric": {
+                                "dimensions": dimensions,
+                                "name": "Errors",
+                                "namespace": namespace
+                            },
+                            "period": 60,
+                            "stat": "Sum"
+                        },
+                        "returnData": True
+                    }
+                ]
             },
-            "newState": {
+            "state": {
                 "value": new_state,
                 "reason": f"Threshold Crossed: 1 out of the last 1 datapoints [2.0 (19/06/24 12:00:00)] was greater than or equal to the threshold (1.0).",
                 "timestamp": "2024-06-19T12:00:00.000+0000"
@@ -107,12 +114,7 @@ def create_stepfunctions_alarm_event(
         event_id="sf-alarm-123",
         description="The TestStateMachine state machine failed.",
         namespace="AWS/States",
-        dimensions=[
-            {
-                "name": "StateMachineArn",
-                "value": state_machine_arn
-            }
-        ]
+        dimensions={"StateMachineArn": state_machine_arn}
     )
 
 
@@ -141,12 +143,7 @@ def create_lambda_alarm_event(
         event_id="lambda-alarm-123",
         description="Lambda function errors detected",
         namespace="AWS/Lambda",
-        dimensions=[
-            {
-                "name": "FunctionName",
-                "value": function_name
-            }
-        ]
+        dimensions={"FunctionName": function_name}
     )
 
 
@@ -173,12 +170,7 @@ def create_unsupported_service_alarm_event(
         event_id="unsupported-alarm-123",
         description="Database connection errors",
         namespace="AWS/RDS",  # Not yet supported for resource extraction
-        dimensions=[
-            {
-                "name": "DBInstanceIdentifier",
-                "value": "my-database-instance"
-            }
-        ]
+        dimensions={"DBInstanceIdentifier": "my-database-instance"}
     )
 
 
@@ -242,7 +234,7 @@ REAL_INFRASTRUCTURE_FIXTURES = {
                 "threshold": 1.0,
                 "comparisonOperator": "GreaterThanOrEqualToThreshold"
             },
-            "newState": {
+            "state": {
                 "value": "ALARM",
                 "reason": "Threshold Crossed: 1 out of the last 1 datapoints [3.0 (19/06/24 14:30:00)] was greater than or equal to the threshold (1.0).",
                 "timestamp": "2024-06-19T14:30:00.000+0000"
@@ -283,7 +275,7 @@ REAL_INFRASTRUCTURE_FIXTURES = {
                 "threshold": 1.0,
                 "comparisonOperator": "GreaterThanOrEqualToThreshold"
             },
-            "newState": {
+            "state": {
                 "value": "ALARM",
                 "reason": "Threshold Crossed: 2 out of the last 1 datapoints [2.0 (19/06/24 16:15:00)] was greater than or equal to the threshold (1.0).",
                 "timestamp": "2024-06-19T16:15:00.000+0000"
@@ -328,7 +320,7 @@ REAL_INFRASTRUCTURE_FIXTURES = {
                 "threshold": 5.0,
                 "comparisonOperator": "GreaterThanThreshold"
             },
-            "newState": {
+            "state": {
                 "value": "ALARM",
                 "reason": "Threshold Crossed: 2 out of the last 2 datapoints [7.5 (19/06/24 18:45:00), 6.2 (19/06/24 18:40:00)] was greater than the threshold (5.0).",
                 "timestamp": "2024-06-19T18:45:00.000+0000"

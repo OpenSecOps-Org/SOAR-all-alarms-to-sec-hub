@@ -321,10 +321,12 @@ def extract_alarm_timestamp(event: Dict[str, Any]) -> str:
     Extract the most accurate timestamp for the alarm state change.
     
     Priority:
-    1. newState.timestamp - actual alarm trigger time
-    2. previousState.timestamp - last known state change  
-    3. event['time'] - EventBridge processing time (fallback)
-    
+    1. state.timestamp - when the alarm entered its current state (actual trigger time)
+    2. event['time'] - EventBridge processing time (fallback)
+
+    previousState.timestamp is deliberately not used: it is when the alarm entered
+    the state it has just left, which can be days or weeks before it fired.
+
     Args:
         event: CloudWatch alarm state change event
         
@@ -340,33 +342,18 @@ def extract_alarm_timestamp(event: Dict[str, Any]) -> str:
         # Try to get the actual alarm state change timestamp
         detail = event.get('detail', {})
         if isinstance(detail, dict):
-            new_state = detail.get('newState', {})
-            if isinstance(new_state, dict):
-                new_state_timestamp = new_state.get('timestamp')
-                if new_state_timestamp:
-                    normalized = normalize_timestamp(new_state_timestamp)
-                    print(f"Using newState.timestamp: {new_state_timestamp} -> {normalized}")
+            state = detail.get('state', {})
+            if isinstance(state, dict):
+                state_timestamp = state.get('timestamp')
+                if state_timestamp:
+                    normalized = normalize_timestamp(state_timestamp)
+                    print(f"Using state.timestamp: {state_timestamp} -> {normalized}")
                     return normalized
-            
+
     except Exception as e:
-        print(f"Error extracting newState.timestamp: {e}")
+        print(f"Error extracting state.timestamp: {e}")
     
-    try:
-        # Fallback to previous state timestamp if available
-        detail = event.get('detail', {})
-        if isinstance(detail, dict):
-            prev_state = detail.get('previousState', {})
-            if isinstance(prev_state, dict):
-                prev_state_timestamp = prev_state.get('timestamp')
-                if prev_state_timestamp:
-                    normalized = normalize_timestamp(prev_state_timestamp)
-                    print(f"Using previousState.timestamp: {prev_state_timestamp} -> {normalized}")
-                    return normalized
-            
-    except Exception as e:
-        print(f"Error extracting previousState.timestamp: {e}")
-    
-    # Final fallback to EventBridge event timestamp
+    # Fallback to EventBridge event timestamp
     event_time = event.get('time', '')
     normalized = normalize_timestamp(event_time)
     print(f"Using EventBridge timestamp as fallback: {event_time} -> {normalized}")

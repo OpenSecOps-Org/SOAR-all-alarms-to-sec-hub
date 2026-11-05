@@ -215,7 +215,7 @@ class TestRealComplexAlarmScenarios:
         
         for prev_state, new_state in state_transitions:
             test_event = complex_event.copy()
-            test_event['detail']['newState']['value'] = new_state
+            test_event['detail']['state']['value'] = new_state
             test_event['detail']['previousState']['value'] = prev_state
             test_event['id'] = f"state-transition-{prev_state}-to-{new_state}"
             

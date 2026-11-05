@@ -1,5 +1,11 @@
 # Change Log
 
+## v1.3.7
+    * Fixed alarm findings being stamped with the wrong time. The Lambda looked for `detail.newState.timestamp`, a field CloudWatch "Alarm State Change" events do not contain, so `CreatedAt`, `UpdatedAt`, `FirstObservedAt` and `LastObservedAt` always carried `detail.previousState.timestamp`: the time the alarm entered the state it was leaving, which can be days or weeks before it fired. These fields now carry `detail.state.timestamp`, the time the alarm fired. Findings already in Security Hub are not changed.
+    * SOAR's CloudWatch context enrichment takes its incident time from `FirstObservedAt`, so for Lambda and Step Functions alarms it now looks for logs and failed executions around the actual alarm instead of an earlier time. No SOAR change is needed.
+    * Removed the fallback to `detail.previousState.timestamp`. If `detail.state.timestamp` is absent, the EventBridge event time is used.
+    * Test fixtures now build `detail.state` and `configuration.metrics[0].metricStat.metric` as CloudWatch sends them. This also fixes two resource extraction tests that were failing.
+
 ## v1.3.6
     * Security: bump `urllib3` floor to `>=2.8.0` in `boto3.in` (distributed from canonical `Installer/templates/boto3.in`) to remediate CVE-2026-97687 (HTTPS-proxy TLS configuration ignored or overridden), CVE-2026-97688 (infinite loop on chunked Deflate responses) and CVE-2026-97689 (unbounded chunk-size-line buffering). All three are fixed in urllib3 2.8.0; the previous `>=2.7.0` floor resolved to 2.7.0, which is affected by all three. Locks recompiled with `--upgrade`; other transitive deps refreshed to their latest in-range versions as a side effect (no code or behaviour change).
 
