@@ -214,7 +214,8 @@ class TestSpecification_2_AlarmEventDetectionAndFiltering:
             assert finding['Id'] == "alarm-event-123"
             assert finding['AwsAccountId'] == "555666777888"
             assert finding['Title'] == "INFRA-TestService-Failure-HIGH"
-            assert finding['Description'] == "Test service alarm description"
+            assert finding['Description'] == (
+                "Test service alarm description\n\nAlarm state reason: " + test_event['detail']['state']['reason'])
 
     def test_suppresses_cis_alarms(self):
         """REQUIREMENT: Must suppress CIS alarms completely"""
@@ -538,7 +539,8 @@ class TestSpecification_5_SecurityHubFindingCreationAndASFFCompliance:
             assert 'Severity' in finding
             assert finding['Severity']['Label'] == "HIGH"
             assert finding['Title'] == "INFRA-TestService-Failure-HIGH"
-            assert finding['Description'] == "Test service failure detection"
+            assert finding['Description'] == (
+                "Test service failure detection\n\nAlarm state reason: " + complete_event['detail']['state']['reason'])
             assert 'Resources' in finding
             assert isinstance(finding['Resources'], list)
             assert len(finding['Resources']) >= 1
@@ -1074,6 +1076,85 @@ class TestSpecification_8_TimestampHandlingAndEdgeCases:
                 # Acceptable to raise errors for severely malformed events
                 error_msg = str(e).lower()
                 assert any(keyword in error_msg for keyword in ["event", "detail", "string indices", "dict", "account", "region"])
+
+
+class TestSpecification_8b_AlarmStateReasonInDescription:
+    """
+    SPECIFICATION 8b: The alarm state reason is part of the finding Description
+
+    detail.state.reason says why the alarm entered ALARM: which datapoints crossed
+    the threshold, or that the state was set by hand. The SOAR email and its AI
+    analysis read Description, so the reason goes there:
+    - "<alarm description>\\n\\nAlarm state reason: <reason>"
+    - only the reason line when the alarm has no description
+    - Description unchanged when there is no usable reason
+    - never detail.previousState.reason, which describes the state being left
+    - at most 1024 characters, the ASFF limit for Description
+    """
+
+    @staticmethod
+    def _publish(event):
+        with patch.object(lambda_app, 'get_client') as mock_get_client:
+            mock_securityhub = MagicMock()
+            mock_securityhub.batch_import_findings.return_value = {'FailedCount': 0}
+            mock_get_client.return_value = mock_securityhub
+            assert lambda_app.lambda_handler(event, None) is True
+            return mock_securityhub.batch_import_findings.call_args[1]['Findings'][0]
+
+    def test_appends_state_reason_to_description(self):
+        """REQUIREMENT: Description is the alarm description, a blank line, then the state reason"""
+        event = create_cloudwatch_alarm_event(alarm_name="INFRA-Service-Error-HIGH", description="Service failed")
+        event['detail']['state']['reason'] = "Threshold Crossed: 1 datapoint [1.0] was >= the threshold (1.0)."
+
+        finding = self._publish(event)
+
+        assert finding['Description'] == (
+            "Service failed\n\nAlarm state reason: Threshold Crossed: 1 datapoint [1.0] was >= the threshold (1.0).")
+
+    def test_reason_alone_when_alarm_has_no_description(self):
+        """REQUIREMENT: Without an alarm description, Description is the reason line alone"""
+        event = create_cloudwatch_alarm_event(alarm_name="INFRA-Service-Error-HIGH")
+        del event['detail']['configuration']['description']
+        event['detail']['state']['reason'] = "Threshold Crossed: 1 datapoint [1.0]."
+
+        finding = self._publish(event)
+
+        assert finding['Description'] == "Alarm state reason: Threshold Crossed: 1 datapoint [1.0]."
+
+    def test_description_unchanged_without_usable_reason(self):
+        """REQUIREMENT: A missing, empty, blank or non-string reason leaves Description as before"""
+        for reason in (None, "", "   ", 12345):
+            event = create_cloudwatch_alarm_event(alarm_name="INFRA-Service-Error-HIGH", description="Service failed")
+            event['detail']['state']['reason'] = reason
+            assert self._publish(event)['Description'] == "Service failed"
+
+        event = create_cloudwatch_alarm_event(alarm_name="INFRA-Service-Error-HIGH", description="Service failed")
+        del event['detail']['state']['reason']
+        assert self._publish(event)['Description'] == "Service failed"
+
+        event = create_cloudwatch_alarm_event(alarm_name="INFRA-Service-Error-HIGH")
+        del event['detail']['configuration']['description']
+        del event['detail']['state']['reason']
+        assert self._publish(event)['Description'] == "N/A"
+
+    def test_never_uses_previous_state_reason(self):
+        """REQUIREMENT: detail.previousState.reason is never used"""
+        event = create_cloudwatch_alarm_event(alarm_name="INFRA-Service-Error-HIGH", description="Service failed")
+        del event['detail']['state']['reason']
+        event['detail']['previousState']['reason'] = "PREVIOUS STATE REASON"
+
+        assert "PREVIOUS STATE REASON" not in self._publish(event)['Description']
+
+    def test_description_truncated_to_asff_limit(self):
+        """REQUIREMENT: Description never exceeds 1024 characters; a cut is marked with ..."""
+        event = create_cloudwatch_alarm_event(alarm_name="INFRA-Service-Error-HIGH", description="Service failed")
+        event['detail']['state']['reason'] = "x" * 3000
+
+        description = self._publish(event)['Description']
+
+        assert len(description) == 1024
+        assert description.startswith("Service failed\n\nAlarm state reason: xxx")
+        assert description.endswith("...")
 
 
 class TestSpecification_9_IntegrationTestingWithRealAWSServices:

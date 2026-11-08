@@ -150,7 +150,7 @@ def lambda_handler(event, _context):
     # Extract alarm details
     detail = event['detail']
     title = detail['alarmName']  # Alarm name containing severity and service info
-    description = detail['configuration'].get('description', 'N/A')  # Human-readable description
+    description = build_description(detail)  # Alarm description plus why the alarm fired
 
     # Apply filtering rules - suppress specific alarm types
     if "CIS-" in title:
@@ -252,6 +252,41 @@ def lambda_handler(event, _context):
     except Exception as e:
         print(f"Error publishing to Security Hub: {str(e)}")
         raise  # Re-raise for Lambda error handling
+
+
+DESCRIPTION_MAX_LENGTH = 1024  # ASFF limit for a finding's Description
+
+
+def build_description(detail: Dict[str, Any]) -> str:
+    """
+    Build the finding Description: the alarm's description, then why the alarm fired.
+
+    detail.state.reason is CloudWatch's explanation of the transition into the current
+    state, for example which datapoints crossed the threshold, or that the state was set
+    by hand. The SOAR email and its AI analysis read Description, so the reason goes there.
+    detail.previousState.reason describes the state being left and is never used.
+
+    Returns:
+        "<description>\\n\\nAlarm state reason: <reason>", only the reason line when the
+        alarm has no description, or the description unchanged when there is no usable
+        reason. Truncated to DESCRIPTION_MAX_LENGTH, with "..." marking the cut.
+    """
+    description = detail['configuration'].get('description', 'N/A')
+    state = detail.get('state')
+    reason = state.get('reason') if isinstance(state, dict) else None
+    if not isinstance(reason, str) or not reason.strip():
+        return description
+
+    reason_line = f"Alarm state reason: {reason.strip()}"
+    configured = detail['configuration'].get('description')
+    if isinstance(configured, str) and configured.strip():
+        text = f"{configured}\n\n{reason_line}"
+    else:
+        text = reason_line
+
+    if len(text) > DESCRIPTION_MAX_LENGTH:
+        text = text[:DESCRIPTION_MAX_LENGTH - 3] + '...'
+    return text
 
 
 def normalize_timestamp(timestamp_str: str) -> str:

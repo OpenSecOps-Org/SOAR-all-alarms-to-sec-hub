@@ -57,7 +57,9 @@ class TestRealStepFunctionsScenarios:
             # Verify real alarm characteristics
             assert finding['Title'] == "INFRA-TestService-Failure-MEDIUM"
             assert finding['Severity']['Label'] == "MEDIUM"
-            assert finding['Description'] == "The state machine ConfigureSSOAccountPermissionsSM failed."
+            assert finding['Description'] == (
+                "The state machine ConfigureSSOAccountPermissionsSM failed.\n\nAlarm state reason: "
+                + real_sf_event['detail']['state']['reason'])
             assert finding['ProductFields']['IncidentDomain'] == "INFRA"
             
             # Should have resources (currently only account, but test will fail when resource extraction is added)
@@ -129,7 +131,9 @@ class TestRealLambdaFunctionScenarios:
             # Verify real Lambda alarm characteristics
             assert finding['Title'] == "INFRA-TestService-Failure-HIGH"
             assert finding['Severity']['Label'] == "HIGH"
-            assert finding['Description'] == "CreateDelegationTriggerFunction failed."
+            assert finding['Description'] == (
+                "CreateDelegationTriggerFunction failed.\n\nAlarm state reason: "
+                + real_lambda_event['detail']['state']['reason'])
             assert finding['ProductFields']['IncidentDomain'] == "INFRA"
             
             # Should have resources (currently only account, will have Lambda ARN when implemented)

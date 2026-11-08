@@ -1,5 +1,8 @@
 # Change Log
 
+## v1.3.8
+    * Alarm findings now say why the alarm fired. `Description` is the alarm's description, a blank line, then `Alarm state reason:` followed by CloudWatch's `detail.state.reason`, for example which datapoints crossed the threshold, or that the alarm state was set by hand. The SOAR email and its AI analysis read `Description`, so both now see the reason. Without an alarm description, `Description` is the reason line alone; without a reason, it is unchanged. It is cut at 1,024 characters, the ASFF limit for `Description`, with `...` marking the cut. `detail.previousState.reason`, which describes the state being left, is never used.
+
 ## v1.3.7
     * Fixed alarm findings being stamped with the wrong time. The Lambda looked for `detail.newState.timestamp`, a field CloudWatch "Alarm State Change" events do not contain, so `CreatedAt`, `UpdatedAt`, `FirstObservedAt` and `LastObservedAt` always carried `detail.previousState.timestamp`: the time the alarm entered the state it was leaving, which can be days or weeks before it fired. These fields now carry `detail.state.timestamp`, the time the alarm fired. Findings already in Security Hub are not changed.
     * SOAR's CloudWatch context enrichment takes its incident time from `FirstObservedAt`, so for Lambda and Step Functions alarms it now looks for logs and failed executions around the actual alarm instead of an earlier time. No SOAR change is needed.
